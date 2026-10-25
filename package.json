@@ -1,0 +1,44 @@
+{
+  "name": "watchparty",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 3180",
+    "build": "next build",
+    "start": "next start -p 3180",
+    "server": "node --env-file=.env --import tsx server/index.ts",
+    "test": "vitest run",
+    "e2e": "NEXT_DIST_DIR=.next-test playwright test",
+    "playbackinfo": "node --env-file=.env --import tsx scripts/playbackinfo.ts",
+    "scan": "node scripts/scan-secrets.mjs",
+    "typecheck": "tsc --noEmit && tsc --noEmit --target es2022 --module esnext --moduleResolution bundler --strict --skipLibCheck --types node server/index.ts server/room.ts server/db.ts",
+    "build:test": "NEXT_DIST_DIR=.next-test next build",
+    "scan:test": "node scripts/scan-secrets.mjs .next-test/static"
+  },
+  "dependencies": {
+    "@playwright/test": "^1.64.1",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.6.5",
+    "@types/ws": "^8.18.2",
+    "autoprefixer": "^10.6.1",
+    "better-sqlite3": "^12.11.1",
+    "framer-motion": "^14.6.0",
+    "hls.js": "^1.5.20",
+    "lucide-react": "^1.61.0",
+    "next": "^14.2.35",
+    "postcss": "^8.5.31",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.23.15",
+    "vitest": "^4.1.12",
+    "ws": "^8.22.0",
+    "zustand": "^5.0.16"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "typescript": "^5.6.3"
+  }
+}

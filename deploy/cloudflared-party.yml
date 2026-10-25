@@ -1,0 +1,12 @@
+# Template. Replace both <TUNNEL_ID> with the id printed by `cloudflared tunnel create ys-movie-night`,
+# then save as ~/.cloudflared/party.yml. The /ws rule must stay first: cloudflared uses the first match.
+tunnel: <TUNNEL_ID>
+credentials-file: /home/YOUR_USER/.cloudflared/<TUNNEL_ID>.json
+
+ingress:
+  - hostname: party.example.com
+    path: ^/ws$
+    service: http://127.0.0.1:3181
+  - hostname: party.example.com
+    service: http://127.0.0.1:3180
+  - service: http_status:404

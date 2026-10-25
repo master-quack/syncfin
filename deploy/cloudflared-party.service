@@ -1,0 +1,15 @@
+[Unit]
+Description=Cloudflare Tunnel for Y - S Movie Night (party.example.com)
+After=network-online.target ys-movie-night-web.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=YOUR_USER
+ExecStart=/usr/bin/cloudflared --no-autoupdate tunnel --config /home/YOUR_USER/.cloudflared/party.yml run
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

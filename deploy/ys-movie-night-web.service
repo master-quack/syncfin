@@ -1,0 +1,19 @@
+[Unit]
+Description=Y - S Movie Night (Next.js web app)
+After=network.target ys-movie-night-room.service
+Wants=ys-movie-night-room.service
+
+[Service]
+Type=simple
+User=YOUR_USER
+WorkingDirectory=/opt/jellyfin_partyplay
+EnvironmentFile=/opt/jellyfin_partyplay/.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node node_modules/next/dist/bin/next start -p 3180 -H 127.0.0.1
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,21 @@
+[Unit]
+Description=Y - S Movie Night (room server: WebSocket sync + SQLite)
+After=network.target
+
+[Service]
+Type=simple
+User=YOUR_USER
+WorkingDirectory=/opt/jellyfin_partyplay
+EnvironmentFile=/opt/jellyfin_partyplay/.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node --import tsx server/index.ts
+Restart=on-failure
+RestartSec=3
+# SIGTERM makes the server save every room's position before it exits.
+KillSignal=SIGTERM
+TimeoutStopSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

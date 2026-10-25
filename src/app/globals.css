@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: dark; }
+html, body { background: #17222C; color: #F5EFEB; }
+body { font-family: var(--font-inter), system-ui, sans-serif; font-size: 18px; line-height: 1.5; -webkit-text-size-adjust: 100%; }
+:focus-visible { outline: 2px solid #F5EFEB; outline-offset: 2px; }
+::selection { background: #567C8D; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* ---- player ---- */
+/* Subtitles: plain, readable, from the palette. (Safari ignores most cue styling; that is fine.) */
+video::cue { background-color: rgba(23, 34, 44, 0.82); color: #F5EFEB; font-family: var(--font-inter), system-ui, sans-serif; }
+/* Lift subtitles above the control bar while it is showing (Chrome and Safari). */
+[data-controls="on"] video::-webkit-media-text-track-container { transform: translateY(-92px); transition: transform 0.2s; }
+
+/* The seek bar is an <input type=range> for keyboard and screen readers, drawn by the divs behind it. */
+.ys-range { -webkit-tap-highlight-color: transparent; }
+.ys-range::-webkit-slider-runnable-track { background: transparent; height: 24px; }
+.ys-range::-moz-range-track { background: transparent; height: 24px; }
+.ys-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; margin-top: 4px; border-radius: 9999px; background: #F5EFEB; border: 0; }
+.ys-range::-moz-range-thumb { width: 16px; height: 16px; border-radius: 9999px; background: #F5EFEB; border: 0; }
+.ys-range:disabled::-webkit-slider-thumb { background: #7D93A3; }
