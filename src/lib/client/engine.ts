@@ -60,6 +60,9 @@ export class RoomEngine {
   private counters = { nudges: 0, hardSeeks: 0, stalls: 0, reconnects: 0 };
   private lastReactionAt = 0;
   private lastStatsAt = 0;
+  private nextNoteId = 1_000_000_000;
+  private hlsErr = "";
+  private hlsErrs = 0;
   private sourceChangeUntil = 0;
   private path: "hls" | "direct" = "direct";
   /** Phones and tablets: a wider no-correction band and gentler nudges (constant rate changes can glitch audio). */
@@ -172,6 +175,31 @@ export class RoomEngine {
     this.command({ kind: "seek", position: Math.min(Math.max(0, seconds), Math.max(0, dur - 1)) });
   }
 
+  /** "Yousuf paused" lines in the chat, so nobody wonders why the picture just stopped. */
+  private noteAction(by: string, act: Command): void {
+    const clock = (s: number) => {
+      const t = Math.max(0, Math.round(s));
+      const h = Math.floor(t / 3600);
+      const m = Math.floor((t % 3600) / 60);
+      const sec = String(t % 60).padStart(2, "0");
+      return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
+    };
+    const text = act.kind === "play" ? "pressed play" : act.kind === "pause" ? "paused" : act.kind === "seek" ? `jumped to ${clock(act.position)}` : `went back ${act.seconds}s`;
+    const msg = { id: ++this.nextNoteId, name: by, text, ts: Date.now(), note: true };
+    useRoom.setState((s) => ({ chat: [...s.chat, msg].slice(-300) }));
+  }
+
+  /** Host only (the server ignores anyone else): set the audio language for the whole room. */
+  setAudio(lang: string): void {
+    this.send({ t: "audio", lang });
+  }
+
+  /** The player hit a stream problem; the next stats report carries the latest one so a bad device shows up in the server log. */
+  noteHlsError(details: string, httpCode?: number): void {
+    this.hlsErrs++;
+    this.hlsErr = `${details}${httpCode ? `-${httpCode}` : ""}`.slice(0, 24);
+  }
+
   react(kind: ReactionKind): void {
     const now = Date.now();
     if (now - this.lastReactionAt < 150) return;
@@ -186,7 +214,7 @@ export class RoomEngine {
     this.lastStatsAt = Date.now();
     const ua = navigator.userAgent;
     const device = /iPhone|iPod/.test(ua) ? "iphone" : /iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) ? "ipad" : /Android/.test(ua) ? "android" : "desktop";
-    this.send({ t: "stats", s: { ...this.getStats(), device, path: this.path } });
+    this.send({ t: "stats", s: { ...this.getStats(), device, path: this.path, ...(this.hlsErrs ? { hlsErr: this.hlsErr, hlsErrs: this.hlsErrs } : {}) } });
   }
 
   /** Where the room is right now. With `withLead`, aimed ahead by the measured seek time, for starting a fresh stream on the beat. */
@@ -271,6 +299,7 @@ export class RoomEngine {
           chat: msg.chat,
           timeline: msg.timeline,
           stall: msg.stall,
+          audioLang: msg.audioLang ?? null,
           clockOffset: this.clock.offset,
         });
         this.applyActive();
@@ -283,6 +312,7 @@ export class RoomEngine {
           this.holdDriftUntil = 0;
           break;
         }
+        if (msg.act && msg.by) this.noteAction(msg.by, msg.act);
         this.pending = msg.timeline;
         this.holdDriftUntil = 0;
         this.tick();
@@ -298,6 +328,19 @@ export class RoomEngine {
       case "stall":
         store.set({ stall: msg.stall });
         break;
+      case "audio":
+        store.set({ audioLang: msg.lang });
+        break;
+      case "item": {
+        // The room moved on (next episode): a fresh timeline at the start. RoomView loads the new stream.
+        this.active = msg.timeline;
+        this.pending = null;
+        this.stalledSent = false;
+        const note = { id: ++this.nextNoteId, name: "Next up:", text: msg.title, ts: Date.now(), note: true };
+        useRoom.setState((s) => ({ title: msg.title, timeline: msg.timeline, stall: null, chat: [...s.chat, note].slice(-300) }));
+        this.applyActive();
+        break;
+      }
       case "react":
         useRoom.setState((s) => ({ reactions: [...s.reactions.slice(-39), { id: ++this.nextReactionId, kind: msg.kind, by: msg.by }] }));
         break;

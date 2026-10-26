@@ -35,6 +35,8 @@ export class Room {
   private emptyTimer: ReturnType<typeof setTimeout> | null = null;
   private lastReaction = new Map<string, number>();
   private stallStartedAt = 0;
+  /** The room's audio language, set by the host; each viewer's own stream follows it. */
+  audioLang: string | null = null;
 
   constructor(
     readonly row: RoomRow,
@@ -47,7 +49,7 @@ export class Room {
   }
 
   get members(): Member[] {
-    return [...this.peers.values()].map((p) => ({ id: p.id, name: p.name }));
+    return [...this.peers.values()].map((p, i) => ({ id: p.id, name: p.name, host: i === 0 }));
   }
 
   get stallInfo(): StallInfo | null {
@@ -68,6 +70,7 @@ export class Room {
       members: this.members,
       chat: this.store.getChat(this.row.code),
       stall: this.stallInfo,
+      audioLang: this.audioLang,
     });
     this.broadcast({ t: "members", members: this.members }, peer.id);
     this.store.touch(this.row.code, null, this.now());
@@ -104,7 +107,7 @@ export class Room {
     }
     this.timeline = next;
     this.persist();
-    this.broadcast({ t: "timeline", timeline: next, by: peer.name });
+    this.broadcast({ t: "timeline", timeline: next, by: peer.name, act: cmd });
   }
 
   /** A viewer's player is waiting for data. Pause everyone and wait up to 10 s. */
@@ -159,6 +162,31 @@ export class Room {
     if (at - (this.lastReaction.get(from) ?? 0) < REACTION_MIN_GAP_MS) return;
     this.lastReaction.set(from, at);
     this.broadcast({ t: "react", kind, by: peer.name });
+  }
+
+  /** The host picks the language for everyone. Anyone else is ignored quietly. */
+  setAudio(from: string, lang: string): void {
+    const peer = this.peers.get(from);
+    if (!peer || this.members.find((m) => m.id === from)?.host !== true) return;
+    if (!/^[\w-]{1,12}$/.test(lang)) return;
+    this.audioLang = lang;
+    this.broadcast({ t: "audio", lang, by: peer.name });
+  }
+
+  /**
+   * Move the whole room to another title, paused at the start. `from` is the title the caller saw, so two people
+   * pressing "next episode" together move the room once, not twice.
+   */
+  setItem(itemId: string, title: string, from: string): boolean {
+    if (this.row.itemId !== from || itemId === from) return false;
+    const at = this.now();
+    this.clearStall();
+    this.row.itemId = itemId;
+    this.row.title = title;
+    this.store.setItem(this.row.code, itemId, title, at);
+    this.timeline = { ...initialTimeline(itemId, 0, at), version: this.timeline.version + 1 };
+    this.broadcast({ t: "item", itemId, title, timeline: this.timeline });
+    return true;
   }
 
   sync(id: string): void {

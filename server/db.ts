@@ -65,6 +65,11 @@ export class Store {
     throw new Error("could not allocate a room code");
   }
 
+  /** The room moves on to another title (next episode): back to the start. */
+  setItem(code: string, itemId: string, title: string, now = Date.now()): void {
+    this.db.prepare("UPDATE rooms SET item_id = ?, title = ?, position = 0, last_used_at = ? WHERE code = ?").run(itemId, title, now, code);
+  }
+
   getRoom(code: string, now = Date.now()): RoomRow | null {
     const row = this.db
       .prepare(

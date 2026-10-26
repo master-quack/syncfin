@@ -25,14 +25,23 @@ export function Chat({ onSend, overlay = false }: { onSend: (text: string) => vo
         {chat.length === 0 && <p className="text-small text-muted">Quiet so far. Say something before the trailers do.</p>}
         {chat.map((m) => (
           <motion.p
-            key={m.id}
+            key={`${m.note ? "n" : "c"}${m.id}`}
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.15 }}
             className="break-words text-small"
+            data-testid={m.note ? "chat-note" : undefined}
           >
-            <span className={m.name === me ? "font-semibold text-text" : "font-semibold text-muted"}>{m.name}</span>{" "}
-            <span className="text-text">{m.text}</span>
+            {m.note ? (
+              <span className="italic text-dim">
+                {m.name} {m.text}
+              </span>
+            ) : (
+              <>
+                <span className={m.name === me ? "font-semibold text-text" : "font-semibold text-muted"}>{m.name}</span>{" "}
+                <span className="text-text">{m.text}</span>
+              </>
+            )}
           </motion.p>
         ))}
       </div>

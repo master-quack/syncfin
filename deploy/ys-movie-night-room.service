@@ -1,5 +1,5 @@
 [Unit]
-Description=Y - S Movie Night (room server: WebSocket sync + SQLite)
+Description=SyncFin (room server: WebSocket sync + SQLite)
 After=network.target
 
 [Service]

@@ -115,6 +115,21 @@ const server = createServer(async (req, res) => {
       return json(201, { code: row.code });
     }
 
+    const mi = url.pathname.match(/^\/internal\/rooms\/([^/]+)\/item$/);
+    if (req.method === "POST" && mi) {
+      const code = mi[1].toUpperCase();
+      const room = CODE_RE.test(code) ? getRoom(code) : null;
+      if (!room) return json(404, { error: "no such room" });
+      const body = JSON.parse((await readBody(req)) || "{}");
+      const itemId = String(body.itemId ?? "").slice(0, 128);
+      const title = String(body.title ?? "").slice(0, 200);
+      const from = String(body.from ?? "").slice(0, 128);
+      if (!itemId || !title) return json(400, { error: "itemId and title required" });
+      if (!room.setItem(itemId, title, from)) return json(409, { error: "already changed" });
+      log(`room ${code.slice(0, 3)}… moved on to ${JSON.stringify(title.slice(0, 60))}`);
+      return json(200, { ok: true });
+    }
+
     const m = url.pathname.match(/^\/internal\/rooms\/([^/]+)$/);
     if (req.method === "GET" && m) {
       const ip = url.searchParams.get("ip") || "unknown";
@@ -220,6 +235,9 @@ wss.on("connection", (ws, req) => {
         break;
       case "react":
         if (typeof msg.kind === "string" && (REACTIONS as readonly string[]).includes(msg.kind)) room.react(id, msg.kind);
+        break;
+      case "audio":
+        if (typeof msg.lang === "string") room.setAudio(id, msg.lang);
         break;
       case "stats": {
         // Playback numbers for diagnosing stutter: only known keys, short plain values, logged once.

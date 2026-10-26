@@ -1,5 +1,5 @@
 [Unit]
-Description=Y - S Movie Night (Next.js web app)
+Description=SyncFin (Next.js web app)
 After=network.target ys-movie-night-room.service
 Wants=ys-movie-night-room.service
 

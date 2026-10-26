@@ -49,15 +49,17 @@ export function ChatOverlay({
   const me = members.find((m) => m.id === selfId)?.name;
   const [popups, setPopups] = useState<Popup[]>([]);
   const [unread, setUnread] = useState(0);
-  const seen = useRef(chat.length ? chat[chat.length - 1].id : 0);
+  // Real messages and playback notes number separately, so what has been seen is tracked per message.
+  const key = (m: { id: number; note?: boolean }) => `${m.note ? "n" : "c"}${m.id}`;
+  const seen = useRef(new Set(chat.map(key)));
   const closeTimer = useRef<number>();
   const reduceMotion = useReducedMotion();
 
   // New messages from others: pop up (panel closed) or just mark seen (panel open).
   useEffect(() => {
-    const fresh = chat.filter((m) => m.id > seen.current);
+    const fresh = chat.filter((m) => !seen.current.has(key(m)));
     if (fresh.length === 0) return;
-    seen.current = fresh[fresh.length - 1].id;
+    for (const m of fresh) seen.current.add(key(m));
     const others = fresh.filter((m) => m.name !== me);
     if (others.length === 0 || open) return;
     setUnread((n) => n + others.length);

@@ -1,4 +1,4 @@
-Y - S Movie Night ports the synchronisation design (clock sync, scheduled actions,
+SyncFin ports the synchronisation design (clock sync, scheduled actions,
 echo guard, rate and size limits, message names) from OpenWatchParty, rewritten in
 TypeScript.
 

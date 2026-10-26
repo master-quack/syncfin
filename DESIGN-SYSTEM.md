@@ -12,7 +12,7 @@ Pick any title from the existing Jellyfin library, get a room code, everyone wit
 | 2 | Room server in Node/TypeScript (not Rust) | One language with the web app. Rust compile on QuackBox (i5-5200U) is slow. |
 | 3 | Web app AND room server both run on QuackBox, behind the Cloudflare tunnel | One place to debug, same machine as Jellyfin. |
 | 4 | Joining: anyone with the room code (no login). Creating rooms and browsing /library: one shared passcode, entered once per device | Yousuf's choice (option a). Keeps strangers out of the library. |
-| 8 | App name: "Y - S Movie Night" | Yousuf's choice. |
+| 8 | App name: "SyncFin" | Renamed from "Y - S Movie Night" by Yousuf. |
 | 9 | Stall policy: the room WAITS for a stalled viewer and shows a visible note naming who is buffering | Yousuf's choice. Cap on the wait: OPEN QUESTION (see 7). |
 | 10 | Design tone: a bit playful, no emojis, no vibecoded elements | Yousuf's choice. |
 | 11 | No legal pages (privacy policy, terms of service) | Private app, just Yousuf and Simra. |

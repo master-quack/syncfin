@@ -3,6 +3,9 @@ import { requestIp } from "../../../../../lib/backend/ip";
 import { playbackStream, jellyfinConfigured, warmSubtitles } from "../../../../../lib/backend/jellyfin";
 import { MOCK_AUDIO, MOCK_SUBTITLES } from "../../../../../lib/backend/mock";
 import { lookupRoom } from "../../../../../lib/backend/roomserver";
+import { MOCK_ITEMS } from "../../../../../lib/backend/mock";
+import { getLibrary } from "../../../../../lib/backend/jellyfin";
+import { nextInSeries } from "../../../../../lib/backend/series";
 
 export const dynamic = "force-dynamic";
 
@@ -19,11 +22,13 @@ export async function GET(req: Request, { params }: { params: { code: string } }
   const rawAudio = new URL(req.url).searchParams.get("audio");
   const audioIndex = rawAudio === null ? undefined : /^\d{1,3}$/.test(rawAudio) ? Number(rawAudio) : NaN;
   if (Number.isNaN(audioIndex)) return NextResponse.json({ error: "bad audio track" }, { status: 400 });
+  // What follows this episode (for the "next episode" button); riding along here saves the room server another lookup.
+  const next = nextInSeries(jellyfinConfigured() ? await getLibrary().catch(() => []) : MOCK_ITEMS, room.itemId)?.label ?? null;
   if (!jellyfinConfigured()) {
-    return NextResponse.json({ title: room.title, streamUrl: "/api/mock/video", hls: false, subtitles: MOCK_SUBTITLES, audio: { tracks: MOCK_AUDIO, index: audioIndex ?? 0 } });
+    return NextResponse.json({ title: room.title, next, streamUrl: "/api/mock/video", hls: false, subtitles: MOCK_SUBTITLES, audio: { tracks: MOCK_AUDIO, index: audioIndex ?? 0 } });
   }
   const result = await playbackStream(room.itemId, audioIndex).catch(() => ({ error: "Could not reach Jellyfin." }));
   if ("error" in result) return NextResponse.json({ error: result.error }, { status: 422 });
   warmSubtitles(room.itemId, result.subtitles);
-  return NextResponse.json({ title: room.title, streamUrl: result.url, hls: result.hls, mode: result.mode, subtitles: result.subtitles, video: result.video, audio: result.audio });
+  return NextResponse.json({ title: room.title, next, streamUrl: result.url, hls: result.hls, mode: result.mode, subtitles: result.subtitles, video: result.video, audio: result.audio });
 }

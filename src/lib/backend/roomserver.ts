@@ -18,6 +18,19 @@ export async function createRoom(itemId: string, title: string): Promise<string>
   return (await res.json()).code as string;
 }
 
+/** Move a room to another title. False when the room had already moved on from `from`. */
+export async function setRoomItem(code: string, itemId: string, title: string, from: string): Promise<boolean> {
+  const res = await fetch(`${base()}/internal/rooms/${encodeURIComponent(code)}/item`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ itemId, title, from }),
+    cache: "no-store",
+  });
+  if (res.status === 409) return false;
+  if (!res.ok) throw new Error(`room server said ${res.status}`);
+  return true;
+}
+
 export type Lookup = { ok: true; room: RoomInfo } | { ok: false; reason: "missing" | "limited" | "down" };
 
 export async function lookupRoom(code: string, ip: string): Promise<Lookup> {

@@ -148,6 +148,7 @@ export function Player({
   audioTracks,
   audioIndex,
   audioBusy,
+  audioLocked,
   audioError,
   onAudioChange,
   gate,
@@ -165,6 +166,8 @@ export function Player({
   audioTracks: AudioTrackInfo[];
   audioIndex: number | null;
   audioBusy: boolean;
+  /** Only the host picks the language; everyone else follows. */
+  audioLocked: boolean;
   audioError: string;
   onAudioChange: (index: number) => void;
   /** The "take a seat" step shown over the picture until this viewer has joined. */
@@ -438,7 +441,7 @@ export function Player({
             data-testid="audio-note"
             className={`pointer-events-none absolute left-1/2 top-14 z-20 max-w-[90%] -translate-x-1/2 rounded border border-line bg-bg/85 px-4 py-2 text-center text-body ${audioError && !audioBusy ? "text-danger" : "text-text"}`}
           >
-            {audioBusy ? "Switching your audio. A few seconds." : audioError}
+            {audioBusy ? "Loading. A few seconds." : audioError}
           </motion.p>
         )}
       </AnimatePresence>
@@ -568,7 +571,7 @@ export function Player({
                       type="button"
                       role="menuitemradio"
                       aria-checked={audioIndex === t.index}
-                      disabled={!t.playable || audioBusy}
+                      disabled={!t.playable || audioBusy || audioLocked}
                       data-testid="audio-item"
                       onClick={() => {
                         setMenu("none");
@@ -583,7 +586,7 @@ export function Player({
                       {audioIndex === t.index && <Check size={18} className="shrink-0" />}
                     </button>
                   ))}
-                  <p className="px-3 py-2 text-small text-muted">Only changes your own sound. It restarts your stream for a few seconds.</p>
+                  <p className="px-3 py-2 text-small text-muted">{audioLocked ? "The host picks the language for everyone." : "Applies to everyone in the room. Each stream restarts for a few seconds."}</p>
                 </motion.div>
               )}
               {menu === "subs" && (

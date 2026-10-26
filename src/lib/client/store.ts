@@ -17,6 +17,8 @@ interface RoomState {
   chat: ChatMessage[];
   timeline: Timeline | null;
   stall: StallInfo | null;
+  /** Audio language the host chose for the room, if any. */
+  audioLang: string | null;
   /** Reactions currently floating over the picture; each removes itself when its animation ends. */
   reactions: ReactionEvent[];
   /** server time ≈ Date.now() + clockOffset */
@@ -32,6 +34,7 @@ export const useRoom = create<RoomState>((set) => ({
   chat: [],
   timeline: null,
   stall: null,
+  audioLang: null,
   reactions: [],
   clockOffset: 0,
   set: (patch) => set(patch),

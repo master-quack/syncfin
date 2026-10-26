@@ -25,7 +25,7 @@ export type ReactionKind = (typeof REACTIONS)[number];
 export const REACTION_MIN_GAP_MS = 150;
 
 /** Playback numbers a viewer's player may report to the server log (to diagnose stutter on a real device). Nothing else is accepted. */
-export const STATS_KEYS = ["drift", "rate", "buffered", "readyState", "dropped", "seekMs", "nudges", "hardSeeks", "stalls", "reconnects", "clockOffset", "playing", "device", "path"] as const;
+export const STATS_KEYS = ["drift", "rate", "buffered", "readyState", "dropped", "seekMs", "nudges", "hardSeeks", "stalls", "reconnects", "clockOffset", "playing", "device", "path", "hlsErr", "hlsErrs"] as const;
 
 // 32 characters, no 0/O/1/I look-alikes.
 export const ROOM_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -46,6 +46,8 @@ export interface Timeline {
 export interface Member {
   id: string;
   name: string;
+  /** The longest-present viewer. Only the host picks the audio language for the room. */
+  host: boolean;
 }
 
 export interface ChatMessage {
@@ -53,6 +55,8 @@ export interface ChatMessage {
   name: string;
   text: string;
   ts: number;
+  /** A line about what someone did to playback ("paused", "jumped to 12:30"). Made on the viewer's side, never stored. */
+  note?: boolean;
 }
 
 export type Command =
@@ -75,6 +79,7 @@ export type ClientMessage =
   | { t: "ready" }
   | { t: "chat"; text: string }
   | { t: "react"; kind: ReactionKind }
+  | { t: "audio"; lang: string }
   | { t: "stats"; s: Record<string, string | number> }
   | { t: "sync" };
 
@@ -88,11 +93,14 @@ export type ServerMessage =
       members: Member[];
       chat: ChatMessage[];
       stall: StallInfo | null;
+      audioLang: string | null;
     }
   | { t: "pong"; clientTs: number; serverTs: number }
-  | { t: "timeline"; timeline: Timeline; by: string }
+  | { t: "timeline"; timeline: Timeline; by: string; act?: Command }
   | { t: "members"; members: Member[] }
   | { t: "chat"; msg: ChatMessage }
   | { t: "react"; kind: ReactionKind; by: string }
+  | { t: "audio"; lang: string; by: string }
+  | { t: "item"; itemId: string; title: string; timeline: Timeline }
   | { t: "stall"; stall: StallInfo | null }
   | { t: "error"; code: string; message: string };

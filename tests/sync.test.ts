@@ -6,6 +6,8 @@ import { applyCommand, initialTimeline, positionAt, promote, shouldAccept } from
 import { Store, generateCode, RETENTION_MS } from "../server/db";
 import { audioTracks } from "../src/lib/backend/jellyfin";
 import { EMPTY_GRACE_MS, Room, type Peer } from "../server/room";
+import { MOCK_ITEMS } from "../src/lib/backend/mock";
+import { nextInSeries } from "../src/lib/backend/series";
 
 describe("timeline maths", () => {
   const t0 = 1_000_000;
@@ -305,6 +307,36 @@ describe("stall policy", () => {
     room.react("nobody", "heart"); // not in the room: ignored
   });
 
+  it("lets only the host pick the audio language, and tells new joiners", () => {
+    room.setAudio("b", "ita"); // Simra is not the host: ignored
+    expect(room.audioLang).toBeNull();
+    room.setAudio("a", "../x"); // not a language code: ignored
+    expect(room.audioLang).toBeNull();
+    room.setAudio("a", "ita");
+    expect(room.audioLang).toBe("ita");
+    expect(last("b", "audio")).toMatchObject({ lang: "ita", by: "Yousuf" });
+    room.join(peer("c", "Late"));
+    expect(last("c", "welcome")).toMatchObject({ audioLang: "ita" });
+    room.leave("a"); // the next-longest viewer becomes host
+    expect(room.members.find((m) => m.id === "b")?.host).toBe(true);
+    room.setAudio("b", "eng");
+    expect(room.audioLang).toBe("eng");
+  });
+
+  it("moves the whole room to the next episode once, back at the start and paused", () => {
+    expect(room.setItem("ep2", "Show: Two", "wrong")).toBe(false); // the caller was looking at a different episode
+    expect(room.setItem("ep2", "Show: Two", "m")).toBe(true);
+    expect(room.setItem("ep3", "Show: Three", "m")).toBe(false); // a second press at the same moment is ignored
+    expect(room.row.title).toBe("Show: Two");
+    const msg = last("b", "item") as Extract<ServerMessage, { t: "item" }>;
+    expect(msg).toMatchObject({ itemId: "ep2", title: "Show: Two" });
+    expect(msg.timeline).toMatchObject({ itemId: "ep2", anchorPos: 0, playing: false });
+    expect(msg.timeline.version).toBeGreaterThan(room.timeline.version - 1);
+    expect(store.getRoom(room.row.code, clock)?.itemId).toBe("ep2");
+    room.join(peer("c", "Late"));
+    expect(last("c", "welcome")).toMatchObject({ title: "Show: Two" });
+  });
+
   it("logs when a stall starts, and how it ended", () => {
     const lines: string[] = [];
     const r2 = new Room(store.createRoom("m2", "Movie 2", clock), store, () => clock, (m) => lines.push(m));
@@ -361,3 +393,14 @@ describe("audio track list", () => {
   });
 });
 
+
+describe("next episode", () => {
+  it("follows season and episode order, skips what cannot play, and stops at the end", () => {
+    expect(nextInSeries(MOCK_ITEMS, "mock-ep-1")).toMatchObject({ id: "mock-ep-2", label: "S1E2 · The Second One" });
+    expect(nextInSeries(MOCK_ITEMS, "mock-ep-2")).toMatchObject({ id: "mock-ep-3", title: "Test Show: Season Two Opens" });
+    expect(nextInSeries(MOCK_ITEMS, "mock-ep-3")).toBeNull();
+    expect(nextInSeries(MOCK_ITEMS, "mock-1")).toBeNull(); // a movie
+    const greyed = MOCK_ITEMS.map((i) => (i.id === "mock-ep-2" ? { ...i, playable: false } : i));
+    expect(nextInSeries(greyed, "mock-ep-1")?.id).toBe("mock-ep-3");
+  });
+});

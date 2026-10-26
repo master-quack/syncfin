@@ -16,6 +16,9 @@ export const MOCK_ITEMS: LibraryItem[] = [
     reason: "The sound is AC3, which browsers cannot play without converting it.",
     hasPoster: false,
   },
+  { id: "mock-ep-1", title: "Pilot", subtitle: "Test Show S1E1", kind: "Episode", runtimeMin: 3, bitrateMbps: 0.5, playable: true, mode: "direct", reason: null, hasPoster: false, seriesId: "mock-show", seriesName: "Test Show", season: 1, episode: 1 },
+  { id: "mock-ep-2", title: "The Second One", subtitle: "Test Show S1E2", kind: "Episode", runtimeMin: 3, bitrateMbps: 0.5, playable: true, mode: "direct", reason: null, hasPoster: false, seriesId: "mock-show", seriesName: "Test Show", season: 1, episode: 2 },
+  { id: "mock-ep-3", title: "Season Two Opens", subtitle: "Test Show S2E1", kind: "Episode", runtimeMin: 3, bitrateMbps: 0.5, playable: true, mode: "direct", reason: null, hasPoster: false, seriesId: "mock-show", seriesName: "Test Show", season: 2, episode: 1 },
 ];
 
 // Stand-in subtitle tracks for the mock library and the browser tests.

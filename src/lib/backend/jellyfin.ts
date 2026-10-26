@@ -15,6 +15,11 @@ export interface LibraryItem {
   mode: "direct" | "remux" | null;
   reason: string | null;
   hasPoster: boolean;
+  /** Episodes only: the show they belong to, and where they sit in it. */
+  seriesId?: string;
+  seriesName?: string;
+  season?: number | null;
+  episode?: number | null;
 }
 
 const list = (v: string | undefined, fallback: string) =>
@@ -37,7 +42,7 @@ async function jf(path: string, init: RequestInit = {}): Promise<Response> {
     ...init,
     headers: {
       "X-Emby-Token": token(),
-      Authorization: `MediaBrowser Client="Y-S Movie Night", Device="QuackBox", DeviceId="ys-movie-night", Version="0.1", Token="${token()}"`,
+      Authorization: `MediaBrowser Client="SyncFin", Device="QuackBox", DeviceId="ys-movie-night", Version="0.1", Token="${token()}"`,
       "Content-Type": "application/json",
       ...(init.headers ?? {}),
     },
@@ -273,7 +278,7 @@ export async function fetchLibrary(): Promise<LibraryItem[]> {
     const q = new URLSearchParams({
       IncludeItemTypes: "Movie,Episode",
       Recursive: "true",
-      Fields: "MediaSources,MediaStreams,Path,ProductionYear,SeriesName,ParentIndexNumber,IndexNumber",
+      Fields: "MediaSources,MediaStreams,Path,ProductionYear,SeriesName,SeriesId,ParentIndexNumber,IndexNumber",
       SortBy: "SortName",
       SortOrder: "Ascending",
       StartIndex: String(start),
@@ -310,6 +315,9 @@ export async function fetchLibrary(): Promise<LibraryItem[]> {
       mode,
       reason,
       hasPoster: !!it.ImageTags?.Primary,
+      ...(isEp && it.SeriesId
+        ? { seriesId: String(it.SeriesId), seriesName: String(it.SeriesName ?? ""), season: it.ParentIndexNumber ?? null, episode: it.IndexNumber ?? null }
+        : {}),
     }];
   });
 }
@@ -342,7 +350,7 @@ export type StreamResult =
 export async function playbackStream(id: string, audioIndex?: number): Promise<StreamResult> {
   const audio = audioCodecs().join(",");
   const profile = {
-    Name: "Y-S Movie Night (no video re-encode)",
+    Name: "SyncFin (no video re-encode)",
     MaxStreamingBitrate: 40_000_000,
     DirectPlayProfiles: [{ Type: "Video", Container: containers().join(","), VideoCodec: videoCodecs().join(","), AudioCodec: audio }],
     TranscodingProfiles: remuxEnabled()

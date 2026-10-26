@@ -205,6 +205,9 @@ test("two viewers stay in sync: play, pause, seek, back 15, stall, chat, restart
   await a.locator("#chat").fill("is the popcorn ready");
   await a.locator("#chat").press("Enter");
   await expect(b.getByTestId("chat-log")).toContainText("is the popcorn ready");
+  // what the other person did to playback shows up as small notes
+  await expect(b.getByTestId("chat-log")).toContainText(/Yousuf (paused|pressed play|jumped to)/);
+  await expect(a.getByTestId("chat-log")).toContainText(/Simra (paused|pressed play|jumped to \d|went back)/);
   await b.screenshot({ path: `${SHOTS}/room-desktop.png` });
 
   await a.waitForTimeout(2500);
@@ -427,7 +430,7 @@ test("playback check page: browser support list shows, the stream test asks for 
   await ctx.close();
 });
 
-test("audio track picker: shows with 2+ tracks, switches only my own stream, asks for the right track, and is remembered", async ({ browser }) => {
+test("audio track picker: shows with 2+ tracks, the host's pick applies to everyone, asks for the right track, and is remembered", async ({ browser }) => {
   const code = await createRoom(browser);
   const ctxA = await browser.newContext();
   const a = await ctxA.newPage();
@@ -454,9 +457,10 @@ test("audio track picker: shows with 2+ tracks, switches only my own stream, ask
   await a.getByTestId("audio-btn").click();
   await expect(a.getByTestId("audio-item").nth(1)).toHaveAttribute("aria-checked", "true", { timeout: 5000 });
 
-  // my choice is mine alone: Simra still has the default
+  // the host's choice is the room's: Simra follows it, and cannot pick her own
   await b.getByTestId("audio-btn").click();
-  await expect(b.getByTestId("audio-item").first()).toHaveAttribute("aria-checked", "true");
+  await expect(b.getByTestId("audio-item").nth(1)).toHaveAttribute("aria-checked", "true", { timeout: 15_000 });
+  await expect(b.getByTestId("audio-item").first()).toBeDisabled();
 
   // remembered on this device: a fresh visit asks for the Spanish track straight away
   const mark = requested.length;
@@ -470,3 +474,46 @@ test("audio track picker: shows with 2+ tracks, switches only my own stream, ask
   await ctxA.close();
 });
 
+
+test("shows fold into one card with season tabs, and the next-episode button moves the whole room", async ({ browser }) => {
+  const ctx = await browser.newContext();
+  const lib = await ctx.newPage();
+  await lib.goto(`${WEB}/library`);
+  // the passcode box allows only a few tries a minute, and the earlier tests used them up: wait the minute out if told to
+  for (let tries = 0; tries < 3; tries++) {
+    await lib.getByLabel("Passcode").fill(process.env.PARTY_PASSCODE!);
+    await lib.getByRole("button", { name: "Let me in" }).click();
+    if (await lib.getByTestId("library-show").waitFor({ timeout: 4000 }).then(() => true, () => false)) break;
+    await lib.waitForTimeout(61_000);
+  }
+  // one card for the whole show, closed until asked
+  await expect(lib.getByTestId("library-show")).toHaveCount(1);
+  await expect(lib.getByTestId("episode-row")).toHaveCount(0);
+  await lib.getByTestId("show-toggle").click();
+  await expect(lib.getByTestId("season-tab")).toHaveCount(2);
+  await expect(lib.getByTestId("episode-row")).toHaveCount(2); // season 1
+  await lib.getByTestId("season-tab").nth(1).click();
+  await expect(lib.getByTestId("episode-row")).toHaveCount(1); // season 2
+  await lib.getByTestId("season-tab").first().click();
+  await lib.screenshot({ path: `${SHOTS}/library-show.png` });
+  await lib.getByTestId("episode-row").first().getByRole("button", { name: "Open a room" }).click();
+  await lib.waitForURL(/\/room\/[A-Z0-9]{8}$/);
+  const code = lib.url().split("/").pop()!;
+  await ctx.close();
+
+  const a = await sit(await browser.newContext(), code, "Yousuf");
+  const b = await sit(await browser.newContext(), code, "Simra");
+  await expect(a.getByTestId("room-title")).toContainText("Pilot");
+  await expect(a.getByTestId("next-episode")).toContainText("S1E2");
+  await a.getByTestId("next-btn").click();
+  await a.getByTestId("next-confirm").click();
+  for (const page of [a, b]) {
+    await expect(page.getByTestId("room-title")).toContainText("The Second One", { timeout: 10_000 });
+    await expect(page.getByTestId("chat-log")).toContainText("Next up: Test Show: The Second One");
+  }
+  await expect(a.getByTestId("next-episode")).toContainText("S2E1", { timeout: 10_000 });
+  await a.getByTestId("next-btn").click();
+  await a.getByTestId("next-confirm").click();
+  await expect(b.getByTestId("room-title")).toContainText("Season Two Opens", { timeout: 10_000 });
+  await expect(a.getByTestId("next-episode")).toHaveCount(0, { timeout: 10_000 }); // the last episode: no button
+});

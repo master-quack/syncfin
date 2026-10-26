@@ -62,6 +62,10 @@ export function RoomView({ code, title, wsUrl }: { code: string; title: string; 
   const conn = useRoom((s) => s.conn);
   const members = useRoom((s) => s.members);
   const selfId = useRoom((s) => s.selfId);
+  const audioLang = useRoom((s) => s.audioLang);
+  const roomTitle = useRoom((s) => s.title) || title;
+  const itemId = useRoom((s) => s.timeline?.itemId);
+  const isHost = useRoom((s) => s.members.find((m) => m.id === s.selfId)?.host ?? true);
   // Once this viewer has taken a seat the picture stays up, whatever the connection does (drops and retries included).
   const dead = conn === "missing" || conn === "full" || conn === "limited";
   const reconnecting = started && !dead && conn !== "open";
@@ -69,7 +73,7 @@ export function RoomView({ code, title, wsUrl }: { code: string; title: string; 
   type Loaded = { ok: true; url: string } | { ok: false; error: string };
 
   /** Fetches a stream plan. `audio` asks for a particular audio track; `quiet` keeps failures out of the big error banner. */
-  const loadStream = async (isReload: boolean, audio?: number, quiet = false): Promise<Loaded> => {
+  const loadStream = async (isReload: boolean, audio?: number, quiet = false, fresh = false): Promise<Loaded> => {
     const fetchPlan = async (a?: number) => {
       const r = await fetch(`/api/rooms/${code}/stream${a !== undefined ? `?audio=${a}` : ""}`);
       const body = await r.json();
@@ -80,13 +84,14 @@ export function RoomView({ code, title, wsUrl }: { code: string; title: string; 
       let body = await fetchPlan(audio);
       // First load: if this device chose a language before and this title offers it, start in it.
       const offered: AudioTrackInfo[] = Array.isArray(body.audio?.tracks) ? body.audio.tracks : [];
-      if (!isReload && audio === undefined && offered.length > 1) {
+      if ((!isReload || fresh) && audio === undefined && offered.length > 1) {
         const pref = readPref(AUDIO_PREF_KEY);
         const current = offered.find((t) => t.index === body.audio.index);
         const want = pref ? offered.find((t) => t.lang === pref && t.playable) : undefined;
         if (pref && want && current?.lang !== pref && want.index !== body.audio.index) body = await fetchPlan(want.index).catch(() => body);
       }
       if (!quiet) setStreamError("");
+      setNext(typeof body.next === "string" ? body.next : null);
       setHls(!!body.hls);
       setReady(!body.hls);
       streamUrlRef.current = body.streamUrl;
@@ -159,7 +164,7 @@ export function RoomView({ code, title, wsUrl }: { code: string; title: string; 
 
   useEffect(() => {
     setName(readName());
-    useRoom.getState().set({ conn: "idle", chat: [], members: [], stall: null, timeline: null, reactions: [] });
+    useRoom.getState().set({ conn: "idle", chat: [], members: [], stall: null, timeline: null, audioLang: null, reactions: [] });
     // The stream URL is fetched up front so the tap below can unlock playback on iPhone.
     void loadStream(false);
     return () => {
@@ -168,6 +173,65 @@ export function RoomView({ code, title, wsUrl }: { code: string; title: string; 
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code]);
+
+  // The room moved to another title (next episode): everyone loads its stream and waits at the start.
+  const loadedItem = useRef<string | null>(null);
+  const [next, setNext] = useState<string | null>(null);
+  const [confirmNext, setConfirmNext] = useState(false);
+  const [nextError, setNextError] = useState("");
+  const changeEpisode = async () => {
+    const engine = engineRef.current;
+    window.clearTimeout(switchTimer.current);
+    setTracks([]);
+    setAudioTracks([]);
+    setAudioIndex(null);
+    resumeAtRef.current = 0;
+    engine?.noteSourceChange();
+    switchingRef.current = true;
+    setSwitching(true);
+    const res = await loadStream(true, undefined, false, true);
+    if (!res.ok) {
+      switchingRef.current = false;
+      resumeAtRef.current = null;
+      setSwitching(false);
+      engine?.resync();
+      return;
+    }
+    switchTimer.current = window.setTimeout(finishSwitch, 30_000); // never leave the viewer stuck waiting
+  };
+  useEffect(() => {
+    if (!itemId) return;
+    const first = loadedItem.current === null;
+    const changed = !first && loadedItem.current !== itemId;
+    loadedItem.current = itemId;
+    setConfirmNext(false);
+    setNextError("");
+    if (changed) void changeEpisode();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemId]);
+  const goNext = async () => {
+    setConfirmNext(false);
+    setNextError("");
+    const r = await fetch(`/api/rooms/${code}/next`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ from: itemId }),
+    }).catch(() => null);
+    if (r && !r.ok && r.status !== 409) setNextError((await r.json().catch(() => null))?.error ?? "Could not move on.");
+  };
+
+  // The host's language choice reaches everyone: follow it once per choice (a failed switch is not retried in a loop).
+  const followedLang = useRef("");
+  useEffect(() => {
+    if (!audioLang || switching || audioTracks.length < 2) return;
+    const key = `${audioLang}:${audioTracks.map((t) => t.index).join(",")}`;
+    if (followedLang.current === key) return;
+    followedLang.current = key;
+    const current = audioTracks.find((t) => t.index === audioIndex);
+    const want = audioTracks.find((t) => t.lang === audioLang && t.playable);
+    if (current && want && current.lang !== audioLang) void switchAudio(want.index);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audioLang, audioTracks, audioIndex, switching]);
 
   // Live-remuxed titles arrive as HLS: Safari plays it natively, everything else goes through hls.js.
   useEffect(() => {
@@ -212,6 +276,7 @@ export function RoomView({ code, title, wsUrl }: { code: string; title: string; 
         mediaRetries = 0;
       });
       h.on(Hls.Events.ERROR, (_e, data) => {
+        engineRef.current?.noteHlsError(String(data.details), data.response?.code);
         if (!data.fatal) return;
         // A restarted ffmpeg or a network blip is normal for live remux: retry before giving up.
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR && netRetries++ < 3) return h.startLoad();
@@ -305,7 +370,7 @@ export function RoomView({ code, title, wsUrl }: { code: string; title: string; 
         <div>
           <p className="text-small text-muted">Now showing</p>
           <h1 className="font-display text-d2 leading-none" data-testid="room-title">
-            {title}
+            {roomTitle}
           </h1>
         </div>
         <Ticket code={code} />
@@ -318,14 +383,20 @@ export function RoomView({ code, title, wsUrl }: { code: string; title: string; 
             src={!hls && streamUrl ? streamUrl : undefined}
             started={started}
             engineRef={engineRef}
-            title={title}
+            title={roomTitle}
             code={code}
             tracks={tracks}
             audioTracks={audioTracks}
             audioIndex={audioIndex}
             audioBusy={switching}
+            audioLocked={!isHost}
             audioError={audioError}
-            onAudioChange={(i) => void switchAudio(i)}
+            onAudioChange={(i) => {
+              if (!isHost) return;
+              const lang = audioTracks.find((t) => t.index === i)?.lang;
+              if (lang) engineRef.current?.setAudio(lang);
+              void switchAudio(i);
+            }}
             gate={gate}
             onVideoError={() => started && setStreamError("The picture stopped working.")}
             onSendChat={(t) => engineRef.current?.chat(t)}
@@ -346,6 +417,29 @@ export function RoomView({ code, title, wsUrl }: { code: string; title: string; 
             <p role="note" className={`rounded border border-line bg-surface px-4 py-3 text-body ${support.level === "bad" ? "text-danger" : "text-muted"}`}>
               {support.message}
             </p>
+          )}
+
+          {started && next && (
+            <div className="flex flex-wrap items-center gap-3 rounded border border-line bg-surface px-4 py-3" data-testid="next-episode">
+              <span className="min-w-0 flex-1 text-body text-muted">
+                {confirmNext ? `Move everyone to ${next}?` : `Next: ${next}`}
+              </span>
+              {confirmNext ? (
+                <>
+                  <Button className="px-4 py-2" onClick={() => void goNext()} data-testid="next-confirm">
+                    Yes, move on
+                  </Button>
+                  <Button variant="ghost" className="px-4 py-2" onClick={() => setConfirmNext(false)}>
+                    Stay
+                  </Button>
+                </>
+              ) : (
+                <Button variant="ghost" className="px-4 py-2" onClick={() => setConfirmNext(true)} data-testid="next-btn">
+                  Next episode
+                </Button>
+              )}
+              {nextError && <span className="w-full text-small text-danger">{nextError}</span>}
+            </div>
           )}
 
           {reconnecting && <p className="text-small text-muted">Reconnecting to the room.</p>}
